@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
-
+darwin=$(uname)
 # check that we are not root!
-if [ "$(whoami)" != "root" ]; then
+if [ "$(whoami)" != "root" ] && [ "$darwin" != "Darwin" ]; then
     echo "ERROR: Please run as root. Exiting..."
     exit 1
 fi
@@ -252,7 +252,11 @@ while IFS=, read part start end name size align type format file; do
     if [ -z "$file" ] ; then continue; fi
 
     # push the blob
-    DPATH=$(losetup --show -f $IMG -o $(($start * 512)) --sizelimit $(( ($end-$start+1) * 512)))
+    if [ "$darwin" = "Darwin" ]; then
+      DPATH=$(hdiutil attach -section $start,$(($end-$start + 1)) -imagekey diskimage-class=CRawDiskImage -nomount $IMG)
+    else
+      DPATH=$(losetup --show -f $IMG -o $(($start * 512)) --sizelimit $(( ($end-$start+1) * 512)))
+    fi
     echo "=== Writing $file to $name: ${DPATH} ... "
     case "$format" in
         fastboot)
@@ -262,7 +266,11 @@ while IFS=, read part start end name size align type format file; do
             dd if=$file of=${DPATH}
             ;;
     esac
-    losetup -d ${DPATH}
+    if [ "$darwin" = "Darwin" ]; then
+      hdiutil detach ${DPATH}
+    else
+      losetup -d ${DPATH}
+    fi
 
 done < $gpt
 
